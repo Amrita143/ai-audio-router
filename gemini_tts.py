@@ -12,7 +12,11 @@ from dotenv import load_dotenv
 import pyaudio
 
 # Load environment variables
-load_dotenv()
+try:
+    load_dotenv()
+except Exception as e:
+    # Ignore .env loading errors
+    pass
 
 class GeminiTTS:
     """Handles text-to-speech conversion using Google's Gemini API with VB-Cable compatibility."""
@@ -153,9 +157,17 @@ class GeminiTTS:
                 
                 # Resample to target sample rate if needed
                 if sample_rate != self.target_sample_rate:
-                    from scipy import signal
-                    num_samples = int(len(audio_array) * self.target_sample_rate / sample_rate)
-                    audio_array = signal.resample(audio_array, num_samples)
+                    try:
+                        from scipy import signal
+                        num_samples = int(len(audio_array) * self.target_sample_rate / sample_rate)
+                        audio_array = signal.resample(audio_array, num_samples)
+                    except ImportError:
+                        print("WARNING: scipy not installed. Audio resampling may not work properly.")
+                        print("Install with: pip install scipy")
+                        # Simple linear interpolation fallback
+                        indices = np.linspace(0, len(audio_array) - 1, 
+                                            int(len(audio_array) * self.target_sample_rate / sample_rate))
+                        audio_array = np.interp(indices, np.arange(len(audio_array)), audio_array)
                 
                 # Convert to stereo (duplicate mono to both channels)
                 if self.target_channels == 2:
@@ -194,8 +206,14 @@ class GeminiTTS:
                         converted_data = f.read()
                 
                 # Clean up temporary files
-                os.unlink(temp_input.name)
-                os.unlink(temp_output.name)
+                try:
+                    os.unlink(temp_input.name)
+                except:
+                    pass
+                try:
+                    os.unlink(temp_output.name)
+                except:
+                    pass
                 
                 print(f"Converted to VB-Cable format: {self.target_sample_rate}Hz, {self.target_channels} channels, {self.target_bit_depth}-bit")
                 
@@ -304,7 +322,7 @@ if __name__ == "__main__":
         print(f"Missing: {e}")
         exit(1)
     
-    tts = GeminiTTS()
+    tts = GeminiTTS(api_key = "AIzaSyA2BTRMlCWbNjS1KmZ7upyQ4xY08Otu8mY")
     
     # Test VB-Cable compatible generation
     test_text = "Hello, this is a test of the VB-Cable compatible Gemini text to speech system."

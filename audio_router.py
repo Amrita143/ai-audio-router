@@ -9,9 +9,9 @@ class AudioRouter:
     """Routes audio data to virtual audio output devices."""
     
     def __init__(self, device_name: Optional[str] = None, 
-                 sample_rate: int = 24000,
-                 channels: int = 1,
-                 chunk_size: int = 1024):
+                 sample_rate: int = 48000,  # VB-Cable compatible
+                 channels: int = 2,          # VB-Cable stereo
+                 chunk_size: int = 2048):    # Larger chunks for 48kHz
         self.pyaudio = pyaudio.PyAudio()
         self.device_index = self._find_device(device_name) if device_name else None
         self.sample_rate = sample_rate
@@ -40,9 +40,11 @@ class AudioRouter:
         
         self.is_running = True
         
-        # Open audio stream
+        # Open audio stream with VB-Cable compatible format
+        # Note: PyAudio doesn't have direct 24-bit support, we'll use 32-bit float
+        # which VB-Cable can handle and provides good quality
         self.stream = self.pyaudio.open(
-            format=pyaudio.paInt16,
+            format=pyaudio.paFloat32,  # Better compatibility than paInt24
             channels=self.channels,
             rate=self.sample_rate,
             output=True,
@@ -54,7 +56,7 @@ class AudioRouter:
         self.playback_thread = threading.Thread(target=self._playback_loop)
         self.playback_thread.start()
         
-        print("Audio router started.")
+        print(f"Audio router started: {self.sample_rate}Hz, {self.channels} channels")
     
     def stop(self):
         """Stops the audio routing thread."""
@@ -136,13 +138,14 @@ def find_virtual_cable_device() -> Optional[str]:
     """Automatically finds virtual audio cable device name."""
     p = pyaudio.PyAudio()
     
-    virtual_keywords = ['cable output', 'vb-audio', 'blackhole', 'virtual']
+    virtual_keywords = ['cable input', 'cable output', 'vb-audio', 'blackhole', 'virtual']
     
     for i in range(p.get_device_count()):
         info = p.get_device_info_by_index(i)
         device_name = info['name'].lower()
         
         if any(kw in device_name for kw in virtual_keywords) and info['maxOutputChannels'] > 0:
+            print(f"Found virtual cable: {info['name']} (Index: {i})")
             p.terminate()
             return info['name']
     
